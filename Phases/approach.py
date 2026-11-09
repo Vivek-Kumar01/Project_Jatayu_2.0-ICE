@@ -1,3 +1,13 @@
+"""
+================================================================================
+PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
+PHASE 9: TERMINAL APPROACH (DECELERATION & 3-DEGREE GLIDESLOPE)
+================================================================================
+Flapped deceleration to V_approach followed by steady 3.0-degree glideslope descent 
+to 15 m obstacle screen height under 105 kW Compression-Ignition power.
+================================================================================
+"""
+
 import math
 from ambiance import Atmosphere
 import jatayu_uav as uav
@@ -9,20 +19,20 @@ import Phases.descent as ds
 # ------------------------------------------------------------------------------
 m_initial = float(ds.m)
 m = m_initial
-SoC = float(ds.SoC)
 
 t_step = 0.1  # seconds
 h_target = float(ms.obstacle_height)  # Screen height (15 m MSL)
 
-# Flight idle power setting for level deceleration
+# Flight idle power setting for level deceleration (6% of sea level rated power)
 percent_idle_power = 6.0  # %
-P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # kW
+P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # 6.30 kW for 105 kW block
 
-P_ICE_avionics = ms.power_avionics / uav.eta_alternator       # kW
-P_ICE_shaft = P_ICE_Idle - P_ICE_avionics                     # kW
-P_prop_shaft = max(0.0, P_ICE_shaft * uav.eta_gearbox_ICE)
+# Continuous electrical parasitics drawn via engine-driven alternator
+P_ICE_avionics = ms.power_avionics / uav.eta_alternator       # kW (~0.427 kW)
+P_ICE_shaft = P_ICE_Idle - P_ICE_avionics                     # Net idle brake output [kW]
+P_prop_shaft = max(0.0, P_ICE_shaft * uav.eta_gearbox)
 
-eta_prop = 0.0  # Idling during clean deceleration; no net positive thrust
+eta_prop = 0.0  # Idling during clean deceleration; flat pitch / zero net positive thrust
 P_avail = P_prop_shaft * eta_prop
 
 if P_ICE_shaft < 0.0:
@@ -49,7 +59,7 @@ t = 0.0
 s_hor = 0.0
 Phase_Success = True
 
-t_baseline = float(getattr(ds, 'cumulative_time', ds.t_baseline + ds.t))
+t_baseline = float(getattr(ds, 'cumulative_time', ds.cumulative_time))
 
 # ------------------------------------------------------------------------------
 # 2. SUB-PHASE A: LEVEL DECELERATION (V_cruise -> V_approach at 300 m AGL)
@@ -76,13 +86,13 @@ while V > V_target:
     t += t_step
     s_hor += V * t_step
 
-    # Telemetry logging
+    # Telemetry logging (Pure ICE signature)
     fuel_remaining = m - ms.m_zfw
     P_req = (D * V) / 1000.0  # kW
     cumulative_time = t_baseline + t
     ms.log_telemetry(
-        cumulative_time, 'Approach_Decel', h, V, P_req, P_ICE_Idle, 0.0,
-        fuel_remaining, SoC, xi_ICE, bsfc_idle, m_dot_fuel_gps
+        cumulative_time, 'Approach_Decel', h, V, P_req, P_ICE_Idle,
+        fuel_remaining, xi_ICE, bsfc_idle, m_dot_fuel_gps
     )
 
     if m < ms.m_zfw:
@@ -112,10 +122,10 @@ while h > h_target and Phase_Success:
     # Thrust required along the descending glideslope
     T_req = max(0.0, D - (m * 9.81 * math.sin(theta)))  # N
 
-    # Power requirements strictly in kW
+    # Power delivery through single reduction gearbox
     P_thrust_kW = (T_req * V) / 1000.0
     P_prop_shaft = P_thrust_kW / eta_prop
-    P_ICE_prop = P_prop_shaft / uav.eta_gearbox_ICE
+    P_ICE_prop = P_prop_shaft / uav.eta_gearbox
     P_ICE_total = P_ICE_prop + P_ICE_avionics  # Total brake power required [kW]
 
     percent_power = P_ICE_total / P_ICE_avail if P_ICE_avail > 0.0 else 1.0
@@ -139,13 +149,13 @@ while h > h_target and Phase_Success:
     s_hor += V * math.cos(theta) * t_step
     t += t_step
 
-    # Telemetry logging
+    # Telemetry logging (Pure ICE signature)
     fuel_remaining = m - ms.m_zfw
     P_req = (D * V) / 1000.0  # kW
     cumulative_time = t_baseline + t
     ms.log_telemetry(
-        cumulative_time, 'Approach_Glide', h, V, P_req, P_ICE_total, 0.0,
-        fuel_remaining, SoC, xi_ICE, bsfc_glide, m_dot_fuel_gps
+        cumulative_time, 'Approach_Glide', h, V, P_req, P_ICE_total,
+        fuel_remaining, xi_ICE, bsfc_glide, m_dot_fuel_gps
     )
 
     if m < ms.m_zfw:
@@ -167,11 +177,10 @@ cumulative_distance = float(getattr(ds, 'cumulative_distance', 0.0)) + s_hor
 final_mass = m
 final_velocity = V
 final_altitude = h
-final_SoC = SoC
 
 if Phase_Success:
     print(f'''
-    ------- Approach Successful -------
+    ------- Approach Successful (Pure ICE 105 kW) -------
     Horizontal Distance Covered: {s_hor/1000.0:.2f} km
     Approach Time: {t/60.0:.2f} min
     Final Altitude: {h:.2f} m (Target: {h_target:.1f} m)
@@ -181,12 +190,11 @@ if Phase_Success:
     Final Aircraft Mass: {m:.2f} kg
     Fuel Burned: {m_fuel_burned:.2f} kg
     Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
-    Untouched Safety Reserve: {ms.mass_reserve:.2f} kg
-    Buffer Battery SoC: {SoC*100.0:.2f} %\n''')
+    Untouched Safety Reserve: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''
     ------- Approach Failed -------
     Horizontal Distance Covered: {s_hor/1000.0:.2f} km
     Approach Time: {t/60.0:.2f} min
     Final Altitude: {h:.2f} m
-    Final Mass: {m:.2f} kg | Final SoC: {SoC*100.0:.2f} %\n''')
+    Final Mass: {m:.2f} kg\n''')

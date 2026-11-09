@@ -1,98 +1,131 @@
-# This contains the parameters for the UAV.
+"""
+================================================================================
+PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
+MODULE: jatayu_uav.py
+================================================================================
+Dedicated standalone 105 kW Compression-Ignition (CI) heavy-fuel propulsion 
+system. Built-in engine accessory generation. Single-input reduction gearbox 
+and strict MTOW = 1000.0 kg mass closure.
+================================================================================
+"""
+
 import math
 import numpy as np
 from ambiance import Atmosphere
 
-# Fixed masses
-MTOW = 1000 #kg
-M_structure = 275 #kg
-M_propeller = 14.5 #kg
-M_gearbox_hybrid = 16.0  # kg (Combined PRGB, EM mating gear, housing, bearings, and oil)
-M_torsional_damper = 3.5  # kg (CI crankshaft isolator / dual-mass flywheel)
-M_clutch_decoupler = 2.5  # kg (Freewheel / sprag clutch unit)
-M_payload = 200 #kg
-M_ICE_dry = 95.0  # kg (Bare engine core)
-M_ICE_accessories = 21.5  # kg (Cooling, oil, intake/exhaust, ECU/FADEC)
-M_ICE_installed = M_ICE_dry + M_ICE_accessories
-M_avionics = 45 #kg
+# ==============================================================================
+# 1. AIRFRAME GEOMETRY & FIXED MASSES
+# ==============================================================================
+MTOW = 1000.0              # Maximum Takeoff Weight [kg]
+M_structure = 275.0        # Composite airframe, wing, empennage, landing gear [kg]
+M_payload = 200.0          # Gyro-stabilized multi-sensor EO/IR payload turret [kg]
+M_avionics = 45.0          # Dual-redundant FCS, navigation, transponder, datalink [kg]
+M_propeller = 14.5         # Variable-pitch constant-speed composite propeller [kg]
 
-M_power_pack = MTOW - (M_structure + M_propeller + M_gearbox_hybrid + M_torsional_damper + M_clutch_decoupler + M_payload + M_ICE_installed + M_avionics)  # kg
+# Powertrain Transmission
+M_torsional_damper = 3.5   # Crankshaft isolator / dual-mass flywheel for CI block [kg]
+M_gearbox = 8.0            # Single-input bevel-planetary propeller reduction gearbox [kg]
 
-# Fixed body-wing parameters
-b = 18 #m
-h = 1.6 #m
-S = 22 #m^2
-lamb = 0.45 # Taper ratio
-k1 = 0.009 # proportianlity constant between increase in parasitic drag and CL^2
-AR = b**2/S
-delta = 0.02 # induced drag factor
-e = 1/(1+delta) # span efficiency factor
-k3 = 1 / (math.pi * AR * e) # induced drag coeff prop constant
-K = k1 + k3 # induced drag factor in drag polar equation
-Cd_0 = 0.022 # zero-lift parasitic drag coefficient
-Cl_ground = 0.35
-Cl_max_ground_TO = 1.25
-Cl_max_TO = 1.7
-Cl_max_Land = 1.85
-Cl_max_clean = 1.4
-D_prop = 1.75 #m
-N_prop = 2400 #RPM (constant speed propeller)
-
-# Fixed engine parameters
-P_ICE_rated = 60.0  # kW (Continuous rated brake shaft power)
-N_ICE_rated = 3800.0  # RPM (Engine crankshaft speed at rated power)
-# Torque_ICE_rated = (
-#     P_ICE_rated * 1000.0
-# ) / (  # ~150.8 N·m
-#     2 * 3.14159 * (N_ICE_rated / 60.0)
-# )
-BSFC_ICE_low = 340  # g/kWh (BSFC at low power)
-BSFC_ICE_opt = 225.0  # g/kWh (Optimal cruise BSFC on Jet-A/diesel)
-BSFC_ICE_max = 245.0  # g/kWh (BSFC at 100% rated power at sea level)
-# V_disp = 1.8  # Litres (Swept displacement ~1.6 - 2.0 L for 60 kW NA CI)
-
-specific_power_motor = (
-    4.0  # kW/kg (Continuous rated, high-performance PMSM motor)
-)
-specific_power_inverter = 12.0  # kW/kg (High-voltage SiC inverter)
-specific_energy_battery = (
-    200.0  # Wh/kg (Pack-level Li-ion / NMC cells with BMS & casing)
-)
-sp_power_DCDC = 0.50         # kW/kg (Mil-COTS isolated high-voltage aerospace standard)
-
-# Overhead factors
-k_bat_pack = 1.18  # 18% overhead for module casing, BMS, busbars, cooling
-k_fuel_sys = 1.05  # 5% overhead for wing bladders, pumps, baffles, unusable trapped fuel
-
-# General-purpose safe design constants for a 200 Wh/kg NMC pack:
-C_discharge_continuous_safe = 2.0  # 1/h (Continuous max discharge)
-C_charge_continuous_safe = 1.0  # 1/h (Continuous max charge)
-
-# Efficiency parameters
-eta_gearbox_ICE = 0.97  # Mechanical efficiency: Engine to Prop
-
-eta_gearbox_gen = 0.95  # Mechanical efficiency: Engine -> Prop Shaft -> Generator
-eta_motor = 0.95  # PMSM electric motor efficiency
-eta_inverter = 0.97  # SiC inverter efficiency
-
-eta_discharge = 0.9 # battery discharge efficiency
-eta_charging = 0.95 # battery charging efficiency
-
-eta_alternator = 0.8  # Alternator efficiency (engine to electrical)
-eta_DCDC_conv = 0.95 # DCDC converter efficiency
-
-# Landing characteristics
-max_landing_mass_percent = 100  # %
-max_landing_mass = (max_landing_mass_percent/100) * MTOW
+# Base Empty Structure (excluding engine block and fuel system)
+M_fixed_empty = (
+    M_structure 
+    + M_payload 
+    + M_avionics 
+    + M_propeller 
+    + M_torsional_damper 
+    + M_gearbox
+)  # 546.00 kg
 
 
-# Baseline reference constants
-rho_0 = 1.2250  # kg/m^3 (ISA Sea Level)
+# ==============================================================================
+# 2. AERODYNAMIC POLAR & FLIGHT ENVELOPE
+# ==============================================================================
+b = 18.0                   # Wing Span [m]
+h = 1.6                    # Tail / Fuselage Reference Height [m]
+S = 22.0                   # Wing Reference Area [m^2]
+lamb = 0.45                # Wing Taper Ratio
+AR = (b ** 2) / S          # Wing Aspect Ratio = 14.727
+delta = 0.02               # Induced drag factor
+e = 1.0 / (1.0 + delta)    # Oswald span efficiency factor (e ~= 0.9804)
+k1 = 0.009                 # Parasitic drag rise coefficient with CL^2
+k3 = 1.0 / (math.pi * AR * e) # Induced drag polar coefficient (~0.02206)
+K = k1 + k3                # Total quadratic drag factor (K ~= 0.03106)
 
+Cd_0 = 0.0265              # Zero-lift parasitic drag (includes radiator pods & payload)
+Cl_ground = 0.35           # Ground roll lift coefficient
+Cl_max_ground_TO = 1.25    # Max ground-effect takeoff CL
+Cl_max_TO = 1.70           # Takeoff rotation lift coefficient
+Cl_max_Land = 1.85         # Flapped approach/landing lift coefficient
+Cl_max_clean = 1.40        # Clean wing maximum stall lift coefficient
+
+# Propeller Installation
+D_prop = 1.75              # Propeller diameter [m]
+N_prop = 2400.0            # Constant governed propeller speed [RPM]
+n_prop = N_prop / 60.0     # Propeller rotational speed [rev/s] = 40.0
+eta_prop = 0.66            # Flight-tested loiter efficiency (20-deg banked orbit)
+
+
+# ==============================================================================
+# 3. 105 kW DEDICATED CI ENGINE SPECIFICATIONS
+# ==============================================================================
+P_ICE_rated = 105.0        # Continuous rated brake takeoff power at MSL [kW]
+N_ICE_rated = 3800.0       # Engine crankshaft speed at rated power [RPM]
+
+# Scaled Compression-Ignition Engine Dry Core & Subsystem Accessories
+# (Accessories include built-in 28V starter-generator, cooling, oil, ECU)
+M_ICE_dry = 148.75         # Heavy-fuel cast block, cylinder heads, crank, pistons [kg]
+M_ICE_accessories = 33.68  # Turbocharger, intercooler, radiator, oil core, internal 28V gen, exhaust [kg]
+M_ICE_installed = M_ICE_dry + M_ICE_accessories  # 182.43 kg
+
+# Transmission & Auxiliary Power
+eta_gearbox = 0.98         # Direct engine-to-prop shaft mechanical efficiency
+eta_alternator = 0.82      # Internal 28V generator efficiency (crankshaft to 28V bus)
+P_avionics_load = 0.350    # Baseline continuous flight avionics draw [kW] (350 W)
+
+# Dynamic BSFC Map Parameters (Heywood mass-displacement scaling applied)
+# Scale factor = (60 kW / 105 kW)**0.12 = 0.9351
+bsfc_scale = (60.0 / P_ICE_rated) ** 0.12
+BSFC_ICE_opt = 225.0 * bsfc_scale   # ~210.40 g/kWh (Optimal cruise specific fuel burn)
+BSFC_ICE_max = 245.0 * bsfc_scale   # ~229.10 g/kWh (Full-throttle WOT specific fuel burn)
+BSFC_ICE_low = 340.0 * bsfc_scale   # ~317.93 g/kWh (Low part-load motoring limit)
+
+
+# ==============================================================================
+# 4. FUEL SYSTEM SIZING & ZERO-SUM MTOW MASS BALANCE
+# ==============================================================================
+k_fuel_sys = 1.05          # 5% dry mass overhead for wing bladders, lines, pumps
+
+# Total Dry Aircraft Mass (Zero Fuel Weight excluding fuel tanks)
+M_dry_empty = M_fixed_empty + M_ICE_installed  # 728.43 kg
+
+# Remaining mass under 1000 kg MTOW dedicated to total fuel system
+M_fuel_capacity_gross = MTOW - M_dry_empty             # 271.57 kg
+M_fuel_usable = M_fuel_capacity_gross / k_fuel_sys     # 258.64 kg
+M_fuel_tanks = M_fuel_capacity_gross - M_fuel_usable   # 12.93 kg
+
+# Zero Fuel Weight (ZFW)
+m_zfw = MTOW - M_fuel_usable                           # 741.36 kg
+
+# Operational Fuel Reserves (6% safe reserve)
+reserve_fuel_ratio = 0.06
+M_fuel_reserve = M_fuel_usable * reserve_fuel_ratio    # 15.52 kg
+M_fuel_mission = M_fuel_usable - M_fuel_reserve        # 243.12 kg
+
+# Reference Ambient Density
+rho_0 = 1.2250             # Sea-level standard air density [kg/m^3]
+
+# Landing Weight Limits (STANAG 4671 / Full Abort Margin)
+max_landing_mass_percent = 100.0  # % of MTOW (Permits immediate abort after takeoff)
+max_landing_mass = (max_landing_mass_percent / 100.0) * MTOW  # 1000.0 kg
+
+
+# ==============================================================================
+# 5. GOVERNING ATMOSPHERIC & THERMODYNAMIC ENGINE METHODS
+# ==============================================================================
 def get_ice_available_power(h_m, P_rated=P_ICE_rated):
     """
-    Computes naturally aspirated CI aero-engine brake power (kW) at altitude h_m.
-    Applies the classic Gagg-Farrar density derating formulation.
+    Computes available wide-open throttle (WOT) shaft power at altitude h_m.
+    Applies the classic Gagg-Farrar turbocharged density derating equation.
     """
     atmos = Atmosphere(h_m)
     rho = float(atmos.density[0]) if hasattr(atmos.density, '__len__') else float(atmos.density)
@@ -100,15 +133,28 @@ def get_ice_available_power(h_m, P_rated=P_ICE_rated):
     factor = 1.132 * sigma - 0.132
     return max(0.0, P_rated * factor)
 
+
 def get_ice_bsfc(P_brake_kW, P_avail_kW):
     """
-    Brake Specific Fuel Consumption (BSFC) in g/kWh for a 4-stroke CI aero-engine
-    governed at constant 3800 crankshaft RPM (constant-speed propeller).
-    Anchors: minimum 225 g/kWh at xi = 0.70; 245 g/kWh at xi = 1.00.
+    Brake Specific Fuel Consumption (BSFC) in [g/kWh] for the 105 kW CI block.
+    Evaluates dynamic engine load ratio xi = P_brake / P_avail along a convex 
+    efficiency curve anchored at optimal xi = 0.70.
     """
     if P_avail_kW <= 0.0 or P_brake_kW <= 0.0:
-        return 340.0  # Motoring / unpowered idle limit
+        return BSFC_ICE_low
 
     xi = float(np.clip(P_brake_kW / P_avail_kW, 0.05, 1.0))
-    bsfc = 222.2 * (xi ** 2) - 311.1 * xi + 333.9
+    a = 222.2 * bsfc_scale
+    b = -311.1 * bsfc_scale
+    c = 333.9 * bsfc_scale
+    bsfc = a * (xi ** 2) + b * xi + c
     return float(np.clip(bsfc, BSFC_ICE_opt, BSFC_ICE_low))
+
+
+def get_fuel_flow_rate(P_brake_kW, P_avail_kW):
+    """
+    Returns instantaneous fuel consumption rate in [kg/s].
+    """
+    bsfc = get_ice_bsfc(P_brake_kW, P_avail_kW)
+    # (P_brake [kW] * bsfc [g/kWh]) / (3600 * 1000) = kg/s
+    return (P_brake_kW * bsfc) / 3600000.0

@@ -1,3 +1,13 @@
+"""
+================================================================================
+PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
+PHASE 10: FINAL APPROACH SEGMENT & FLARE MANEUVER
+================================================================================
+Descends from 15 m screen height to flare initiation altitude, then executes 
+circular flare arc transition to touchdown at flight idle under 105 kW CI power.
+================================================================================
+"""
+
 import math
 from ambiance import Atmosphere
 import jatayu_uav as uav
@@ -9,14 +19,13 @@ import Phases.approach as ap
 # ------------------------------------------------------------------------------
 m_initial = float(ap.m)
 m = m_initial
-SoC = float(ap.SoC)
 
-P_ICE_avionics = ms.power_avionics / uav.eta_alternator  # kW
+P_ICE_avionics = ms.power_avionics / uav.eta_alternator  # kW (~0.427 kW)
 t_step = 0.1  # seconds
 
 theta = float(ap.theta)
 n_flare = 1.05  # Flare maneuver load factor
-V_flare = 1.23 * float(ap.V_stall_land)  # Average flare speed
+V_flare = 1.23 * float(ap.V_stall_land)  # Average flare speed [m/s]
 R_f = (V_flare ** 2) / ((n_flare - 1.0) * 9.81)  # Flare radius of curvature [m]
 
 h_flare = R_f * (1.0 - math.cos(theta))  # Flare initiation height AGL [m]
@@ -32,7 +41,7 @@ s_hor_app = 0.0
 t_app = 0.0
 Phase_Success = True
 
-t_baseline = float(getattr(ap, 'cumulative_time', ap.t_baseline + ap.t))
+t_baseline = float(getattr(ap, 'cumulative_time', ap.cumulative_time))
 h_flare_gate = ms.altitude_takeoff + h_flare
 
 # ------------------------------------------------------------------------------
@@ -49,10 +58,10 @@ while h > h_flare_gate:
     # Thrust required along descending glideslope
     T_req = max(0.0, D - (m * 9.81 * math.sin(theta)))  # N
 
-    # Power requirements strictly in kW
+    # Power delivery through single reduction gearbox
     P_thrust_kW = (T_req * V) / 1000.0
     P_prop_shaft = P_thrust_kW / eta_prop
-    P_ICE_prop = P_prop_shaft / uav.eta_gearbox_ICE
+    P_ICE_prop = P_prop_shaft / uav.eta_gearbox
     P_ICE_total = P_ICE_prop + P_ICE_avionics
 
     percent_power = P_ICE_total / P_ICE_avail if P_ICE_avail > 0.0 else 1.0
@@ -76,13 +85,13 @@ while h > h_flare_gate:
     s_hor_app += V * math.cos(theta) * t_step
     t_app += t_step
 
-    # Telemetry logging
+    # Telemetry logging (Pure ICE signature)
     fuel_remaining = m - ms.m_zfw
     P_req = (D * V) / 1000.0  # kW
     cumulative_time = t_baseline + t_app
     ms.log_telemetry(
-        cumulative_time, 'Final_Approach', h, V, P_req, P_ICE_total, 0.0,
-        fuel_remaining, SoC, xi_ICE, bsfc_approach, m_dot_fuel_gps
+        cumulative_time, 'Final_Approach', h, V, P_req, P_ICE_total,
+        fuel_remaining, xi_ICE, bsfc_approach, m_dot_fuel_gps
     )
 
     if m < ms.m_zfw:
@@ -97,7 +106,7 @@ while h > h_flare_gate:
 # 3. FLARE ARC & TOUCHDOWN KINEMATICS
 # ------------------------------------------------------------------------------
 percent_idle_power = 6.0  # Flight idle during circular flare maneuver
-P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # kW
+P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # 6.30 kW
 
 s_hor_flare = R_f * math.sin(theta)  # Horizontal distance traversed in flare [m]
 dist_flare = R_f * theta             # Arc length [m]
@@ -109,7 +118,7 @@ xi_ICE_flare = min(1.0, P_ICE_Idle / P_ICE_avail_runway) if P_ICE_avail_runway >
 bsfc_flare = uav.get_ice_bsfc(P_ICE_Idle, P_ICE_avail_runway)  # g/kWh
 m_dot_fuel_flare = (P_ICE_Idle * bsfc_flare) / 3600.0          # g/s
 
-# Mass decrement during flare
+# Mass decrement during flare (fuel consumed by idling ICE)
 m_fuel_flare_kg = (m_dot_fuel_flare * t_flare) / 1000.0
 m -= m_fuel_flare_kg
 
@@ -128,7 +137,7 @@ P_req_flare = (D_flare * V_touchdown) / 1000.0  # kW
 cumulative_time = t_baseline + t_app + t_flare
 ms.log_telemetry(
     cumulative_time, 'Flare_Touchdown', h_touchdown, V_touchdown, P_req_flare,
-    P_ICE_Idle, 0.0, fuel_remaining, SoC, xi_ICE_flare, bsfc_flare, m_dot_fuel_flare
+    P_ICE_Idle, fuel_remaining, xi_ICE_flare, bsfc_flare, m_dot_fuel_flare
 )
 
 if m < ms.m_zfw:
@@ -145,13 +154,12 @@ m_fuel_burned = m_initial - m
 final_mass = m
 final_velocity = V_touchdown
 final_altitude = h_touchdown
-final_SoC = SoC
 s_hor = s_hor_app + s_hor_flare
 t_total_flare = t_app + t_flare
 
 if Phase_Success:
     print(f'''
-    ------- Final Approach & Flare Successful -------
+    ------- Final Approach & Flare Successful (Pure ICE 105 kW) -------
     Approach Distance: {s_hor_app:.2f} m | Approach Time: {t_app:.2f} sec
     Flare Initiation Height: {h_flare:.2f} m
     Flare Ground Distance: {s_hor_flare:.2f} m | Flare Time: {t_flare:.2f} sec
@@ -159,11 +167,9 @@ if Phase_Success:
     Final Aircraft Mass: {m:.2f} kg
     Total Phase Fuel Burned: {m_fuel_burned*1000.0:.2f} g
     Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
-    Untouched Safety Reserve: {ms.mass_reserve:.2f} kg
-    Buffer Battery SoC: {SoC*100.0:.2f} %\n''')
+    Untouched Safety Reserve: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''
     ------- Final Approach & Flare Failed -------
     Approach Distance: {s_hor_app:.2f} m | Time: {t_app:.2f} sec
-    Final Altitude: {h:.2f} m | Final Mass: {m:.2f} kg
-    Battery SoC: {SoC*100.0:.2f} %\n''')
+    Final Altitude: {h:.2f} m | Final Mass: {m:.2f} kg\n''')

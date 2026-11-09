@@ -1,3 +1,13 @@
+"""
+================================================================================
+PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
+PHASE 4: CRUISE-CLIMB INTEGRATION (ENERGY-HEIGHT METHOD)
+================================================================================
+Simultaneous climb and acceleration from 1,500 m to 3,000 m cruise altitude
+under standalone 105 kW Compression-Ignition power.
+================================================================================
+"""
+
 import math
 from ambiance import Atmosphere
 import jatayu_uav as uav
@@ -9,7 +19,6 @@ import Phases.climb as cl
 # ------------------------------------------------------------------------------
 m_initial = float(cl.m)
 m = float(cl.m)
-SoC = float(cl.SoC)
 V = float(getattr(cl, 'final_velocity', cl.V))
 h = float(getattr(cl, 'final_altitude', cl.h))
 s_hor = float(getattr(cl, 'cumulative_distance', cl.s_hor))
@@ -33,18 +42,9 @@ vel_cruise = math.sqrt(
 dV_dh = (vel_cruise - V) / (h_target - h) if (h_target - h) > 0.0 else 0.0
 
 P_ICE_avionics = ms.power_avionics / uav.eta_alternator  # kW
+percent_ICE_power = 1.0  # Full continuous throttle ICE
 
-P_electric_full = (
-    min(ms.power_battery_discharge, ms.power_inverter / uav.eta_inverter)
-    * uav.eta_inverter
-    * uav.eta_motor
-)  # kW
-
-# Cruise-climb power split (Pure ICE or scheduled assist)
-percent_ICE_power = 1.0       # Full continuous throttle ICE
-percent_electric_power = 0.0  # Conserve battery buffer for loiter/descent contingencies
-
-t_baseline = float(getattr(cl, 'cumulative_time', cl.t_baseline + cl.t))
+t_baseline = float(getattr(cl, 'cumulative_time', cl.cumulative_time))
 
 # ------------------------------------------------------------------------------
 # 2. TIME-MARCHING CRUISE-CLIMB INTEGRATION (1,500 m to 3,000 m MSL)
@@ -57,12 +57,9 @@ while h < h_target:
     P_ICE_full = max(0.0, P_ICE_avail - P_ICE_avionics)
 
     P_ICE = percent_ICE_power * P_ICE_full
-    P_elec = percent_electric_power * P_electric_full
 
-    DoH = P_elec / (P_elec + P_ICE) if (P_elec + P_ICE) > 0.0 else 0.0
-
-    # Propulsion shaft and thrust power delivered to propeller
-    P_prop_shaft = (P_ICE * uav.eta_gearbox_ICE) + P_elec
+    # Propulsion shaft and thrust power delivered to propeller (single reduction gearbox)
+    P_prop_shaft = P_ICE * uav.eta_gearbox
     P_avail = P_prop_shaft * eta_prop  # kW
 
     # Aerodynamic drag and required power
@@ -90,39 +87,23 @@ while h < h_target:
     bsfc_cruise_climb = uav.get_ice_bsfc(P_ICE_brake_total, P_ICE_avail)  # g/kWh
     m_dot_fuel_gps = (P_ICE_brake_total * bsfc_cruise_climb) / 3600.0     # g/s
 
-    # Mass and battery energy decrement per time step
+    # Mass decrement per time step (fuel consumption only)
     m_fuel_step_kg = (m_dot_fuel_gps * t_step) / 1000.0
-    elec_power_battery_bus = (
-        P_elec / (uav.eta_inverter * uav.eta_motor * uav.eta_discharge)
-        if P_elec > 0.0
-        else 0.0
-    )
-    elec_energy_step_kWh = (elec_power_battery_bus * t_step) / 3600.0
 
     # State advancement
     V += R_C * dV_dh * t_step
     h += R_C * t_step
     s_hor += V * math.cos(theta) * t_step
     t += t_step
-
     m -= m_fuel_step_kg
-    SoC -= (elec_energy_step_kWh / ms.battery_capacity)
 
-    # Telemetry logging
+    # Telemetry logging (matching Pure ICE signature)
     fuel_remaining = m - ms.m_zfw
     cumulative_time = t_baseline + t
     ms.log_telemetry(
-        cumulative_time, 'Cruise_Climb', h, V, P_req / 1000.0, P_ICE, P_elec,
-        fuel_remaining, SoC, xi_ICE, bsfc_cruise_climb, m_dot_fuel_gps
+        cumulative_time, 'Cruise_Climb', h, V, P_req / 1000.0, P_ICE_brake_total,
+        fuel_remaining, xi_ICE, bsfc_cruise_climb, m_dot_fuel_gps
     )
-
-    if SoC < ms.SoC_min:
-        print('''
-        Error: Battery state of charge dropped below minimum limit.
-        MISSION FAILED.
-        ''')
-        Phase_Success = False
-        break
 
     if m < ms.m_zfw:
         print('''
@@ -140,26 +121,23 @@ cumulative_distance = s_hor
 final_mass = m
 final_velocity = V
 final_altitude = h
-final_SoC = SoC
 
 if Phase_Success:
     print(f'''
-    ------- Cruise Climb Successful -------
-    EOP P_ICE: {P_ICE:.2f} kW | Load Ratio (xi): {xi_ICE:.2f} | BSFC: {bsfc_cruise_climb:.1f} g/kWh
-    EOP P_electric: {P_elec:.2f} kW | Shaft Power: {P_prop_shaft:.2f} kW | DoH: {DoH*100:.1f} %
+    ------- Cruise Climb Successful (Pure ICE 105 kW) -------
+    EOP ICE Total Power: {P_ICE_brake_total:.2f} kW | Load Ratio (xi): {xi_ICE:.2f}
+    Propeller Shaft Power: {P_prop_shaft:.2f} kW | BSFC: {bsfc_cruise_climb:.1f} g/kWh
     Rate of Climb (EOP): {R_C:.2f} m/s
     Total Phase Climb Time: {t/60.0:.2f} mins
     Final Velocity: {V:.2f} m/s ({V*3.6:.1f} km/h) (Target: {vel_cruise:.2f} m/s)
     Horizontal Distance Travelled: {s_hor/1000.0:.2f} km
     Final Altitude: {h:.2f} m (Target: {h_target:.1f} m)
     Fuel Burned: {(m_initial - m):.2f} kg
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
-    Remaining Battery SoC: {SoC*100.0:.2f} %\n''')
+    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''
     ------- Cruise Climb Failed -------
-    EOP P_ICE: {P_ICE:.2f} kW | P_electric: {P_elec:.2f} kW
+    EOP ICE Total Power: {P_ICE_brake_total:.2f} kW
     Total Phase Climb Time: {t/60.0:.2f} mins
     Horizontal Distance: {s_hor/1000.0:.2f} km
-    Final Altitude: {h:.2f} m
-    Battery SoC: {SoC*100.0:.2f} %\n''')
+    Final Altitude: {h:.2f} m\n''')

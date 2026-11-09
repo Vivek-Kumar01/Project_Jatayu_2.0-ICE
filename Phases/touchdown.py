@@ -1,3 +1,14 @@
+"""
+================================================================================
+PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
+PHASE 11: TOUCHDOWN, FREE-ROLL, & MECHANICAL BRAKING ROLLOUT
+================================================================================
+Runway deceleration from touchdown to complete stop under flight idle with the 
+105 kW Compression-Ignition engine. Evaluates final mission fuel closure and 
+touchdown ground roll distance.
+================================================================================
+"""
+
 from ambiance import Atmosphere
 import jatayu_uav as uav
 import mission_settings as ms
@@ -8,7 +19,6 @@ import Phases.flare as fl
 # ------------------------------------------------------------------------------
 m_initial = float(fl.m)
 m = m_initial
-SoC = float(fl.SoC)
 V = float(getattr(fl, 'final_velocity', fl.V))
 h = float(getattr(fl, 'final_altitude', fl.h))
 rho = float(Atmosphere(h).density[0])
@@ -17,13 +27,14 @@ t_step = 0.1  # seconds
 
 # Flight idle power setting (6% of sea level rated power)
 percent_idle_power = 6.0
-P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # kW
+P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # 6.30 kW for 105 kW block
 
-P_ICE_avionics = ms.power_avionics / uav.eta_alternator       # kW
-P_ICE_shaft = P_ICE_Idle - P_ICE_avionics                     # kW
-P_prop_shaft = max(0.0, P_ICE_shaft * uav.eta_gearbox_ICE)
+# Continuous electrical parasitics drawn via engine-driven alternator
+P_ICE_avionics = ms.power_avionics / uav.eta_alternator       # kW (~0.427 kW)
+P_ICE_shaft = P_ICE_Idle - P_ICE_avionics                     # Net idle brake output [kW]
+P_prop_shaft = max(0.0, P_ICE_shaft * uav.eta_gearbox)
 
-eta_prop = 0.0  # Zero thrust during rollout
+eta_prop = 0.0  # Zero thrust during rollout (flat pitch / ground idle)
 P_avail = P_prop_shaft * eta_prop
 
 if P_prop_shaft < 0.0:
@@ -54,7 +65,7 @@ m -= m_fuel_freeroll
 
 t = N_freeroll
 Phase_Success = True
-t_baseline = float(getattr(fl, 'cumulative_time', fl.t_baseline + fl.t_app + fl.t_flare))
+t_baseline = float(getattr(fl, 'cumulative_time', fl.t_baseline + fl.t_total_flare))
 
 # Structural limit check
 if m > uav.max_landing_mass:
@@ -63,13 +74,13 @@ if m > uav.max_landing_mass:
     )
     Phase_Success = False
 
-# Telemetry log at free-roll completion
+# Telemetry log at free-roll completion (Pure ICE signature)
 fuel_remaining = m - ms.m_zfw
 D_free = 0.5 * rho * (V ** 2) * uav.S * Cd
 P_req_free = (D_free * V) / 1000.0
 ms.log_telemetry(
     t_baseline + t, 'Landing_Freeroll', h, V, P_req_free,
-    P_ICE_Idle, 0.0, fuel_remaining, SoC, xi_ICE_idle, bsfc_idle, m_dot_fuel_gps
+    P_ICE_Idle, fuel_remaining, xi_ICE_idle, bsfc_idle, m_dot_fuel_gps
 )
 
 # ------------------------------------------------------------------------------
@@ -93,7 +104,7 @@ while V > 0.0 and Phase_Success:
         cumulative_time = t_baseline + t
         ms.log_telemetry(
             cumulative_time, 'Mission_Complete', h, 0.0, 0.0,
-            P_ICE_Idle, 0.0, fuel_remaining, SoC, xi_ICE_idle, bsfc_idle, m_dot_fuel_gps
+            P_ICE_Idle, fuel_remaining, xi_ICE_idle, bsfc_idle, m_dot_fuel_gps
         )
         break
 
@@ -109,7 +120,7 @@ while V > 0.0 and Phase_Success:
     cumulative_time = t_baseline + t
     ms.log_telemetry(
         cumulative_time, 'Landing_Rollout', h, V, P_req,
-        P_ICE_Idle, 0.0, fuel_remaining, SoC, xi_ICE_idle, bsfc_idle, m_dot_fuel_gps
+        P_ICE_Idle, fuel_remaining, xi_ICE_idle, bsfc_idle, m_dot_fuel_gps
     )
 
     if m < ms.m_zfw:
@@ -134,14 +145,13 @@ total_mission_time = t_baseline + t
 
 if Phase_Success:
     print(f'''
-    ------- Touchdown Successful -------
-    P_ICE: {P_ICE_Idle:.2f} kW | Load Ratio (xi): {xi_ICE_idle:.2f} | BSFC: {bsfc_idle:.1f} g/kWh
+    ------- Touchdown Successful (Pure ICE 105 kW) -------
+    ICE Flight Idle: {P_ICE_Idle:.2f} kW | Load Ratio (xi): {xi_ICE_idle:.2f} | BSFC: {bsfc_idle:.1f} g/kWh
     Total Ground Roll Distance: {s_land_roll:.2f} m (Limit: {ms.max_permissible_sroll:.0f} m)
     Time to Full Stop: {t:.2f} seconds
     Fuel Burned During Rollout: {m_fuel_burned*1000.0:.2f} g
     Unused Usable Fuel: {fuel_remaining - ms.mass_reserve:.2f} kg
     Untouched Safety Reserve Fuel: {ms.mass_reserve:.2f} kg
-    Final Battery SoC: {SoC*100.0:.2f} %
     ======================================================================
     TOTAL MISSION TIME: {total_mission_time/3600.0:.2f} hours ({(total_mission_time/60.0):.1f} mins)
     TOTAL FUEL CONSUMED: {total_mission_fuel_burned:.2f} kg / {ms.mass_fuel:.2f} kg
@@ -149,7 +159,7 @@ if Phase_Success:
 else:
     print(f'''
     ------- Touchdown Failed -------
-    P_ICE: {P_ICE_Idle:.2f} kW
+    ICE Flight Idle: {P_ICE_Idle:.2f} kW
     Ground Roll Distance: {s_land_roll:.2f} m
     Final Velocity: {V:.2f} m/s | Time: {t:.2f} s
-    Final Mass: {m:.2f} kg | Final SoC: {SoC*100.0:.2f} %\n''')
+    Final Mass: {m:.2f} kg\n''')

@@ -1,3 +1,12 @@
+"""
+================================================================================
+PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
+PHASE 2: PULL-UP & CLIMB TO SCREEN HEIGHT (15 m OBSTACLE)
+================================================================================
+Climb from rotation to 15 m obstacle clearance under standalone 105 kW CI power.
+================================================================================
+"""
+
 import math
 from ambiance import Atmosphere
 import jatayu_uav as uav
@@ -9,7 +18,6 @@ import Phases.takeoff as to
 # ------------------------------------------------------------------------------
 m_initial = float(to.m)
 m = float(to.m)
-SoC = float(to.SoC)
 h = float(to.h)
 V = float(getattr(to, 'final_velocity', to.V_LO))
 s_roll = float(to.s_roll)
@@ -29,22 +37,13 @@ P_ICE_avail = uav.get_ice_available_power(h)
 P_ICE_avionics = ms.power_avionics / uav.eta_alternator  # kW
 P_ICE_full = max(0.0, P_ICE_avail - P_ICE_avionics)     # kW
 
-# Electric propulsion boost limits
-P_electric_full = (
-    min(ms.power_battery_discharge, ms.power_inverter / uav.eta_inverter)
-    * uav.eta_inverter
-    * uav.eta_motor
-)  # kW
-
-percent_ICE_power = 1.0       # Full throttle ICE
-percent_electric_power = 1.0  # Full electric assist during obstacle clearance
-
+# 100% full throttle ICE climb
+percent_ICE_power = 1.0
 P_ICE = percent_ICE_power * P_ICE_full
-P_electric = percent_electric_power * P_electric_full
 
-DoH = P_electric / (P_ICE + P_electric) if (P_ICE + P_electric) > 0.0 else 0.0
-P_shaft_prop = (P_ICE * uav.eta_gearbox_ICE) + P_electric  # kW
-P_available = P_shaft_prop * eta_prop                      # kW (thrust power)
+# Drivetrain mechanical delivery through single reduction gearbox
+P_shaft_prop = P_ICE * uav.eta_gearbox
+P_available = P_shaft_prop * eta_prop  # kW (thrust power)
 
 # ------------------------------------------------------------------------------
 # 3. ENGINE LOAD & FUEL CONSUMPTION METRICS
@@ -75,39 +74,25 @@ while h < ms.obstacle_height:
     # Fuel mass consumed in step (propulsion + avionics alternator)
     m_fuel_step_kg = (m_dot_fuel_gps * t_step) / 1000.0  # kg
 
-    # Electrical energy extracted from battery (including inverter, motor, discharge loss)
-    elec_power_battery_bus = P_electric / (uav.eta_inverter * uav.eta_motor * uav.eta_discharge)  # kW
-    elec_energy_step_kWh = (elec_power_battery_bus * t_step) / 3600.0  # kWh
-
     # State advancement
     V += a_net * t_step
     h += V * math.sin(math.radians(theta)) * t_step
     t += t_step
     s_roll += V * math.cos(math.radians(theta)) * t_step
-
     m -= m_fuel_step_kg
-    SoC -= (elec_energy_step_kWh / ms.battery_capacity)
 
-    # Telemetry logging
+    # Telemetry logging (matching Pure ICE signature)
     fuel_remaining = m - ms.m_zfw
     P_req = (D * V) / 1000.0  # kW
     cumulative_time = float(getattr(to, 'cumulative_time', to.t + to.N)) + t
     ms.log_telemetry(
-        cumulative_time, 'Pull_Up', h, V, P_req, P_ICE, P_electric,
-        fuel_remaining, SoC, xi_ICE, bsfc_pullup, m_dot_fuel_gps
+        cumulative_time, 'Pull_Up', h, V, P_req, P_ICE_brake_total,
+        fuel_remaining, xi_ICE, bsfc_pullup, m_dot_fuel_gps
     )
 
     if h < ms.obstacle_height and s_roll > ms.max_permissible_stot:
         print('''
         Error: Horizontal distance exceeded maximum permissible limit to 15 m obstacle.
-        MISSION FAILED.
-        ''')
-        Phase_Success = False
-        break
-
-    if SoC < ms.SoC_min:
-        print('''
-        Error: Battery state of charge dropped below minimum limit.
         MISSION FAILED.
         ''')
         Phase_Success = False
@@ -129,25 +114,22 @@ cumulative_distance = s_roll
 final_mass = m
 final_velocity = V
 final_altitude = h
-final_SoC = SoC
 
 if Phase_Success:
     print(f'''
-    ------- Pull Up Successful -------
-    P_ICE: {P_ICE:.2f} kW | Load Ratio (xi): {xi_ICE:.2f} | BSFC: {bsfc_pullup:.1f} g/kWh
-    P_electric: {P_electric:.2f} kW | Shaft Power: {P_shaft_prop:.2f} kW | DoH: {DoH*100:.1f} %
+    ------- Pull Up Successful (Pure ICE 105 kW) -------
+    ICE Total Shaft Power: {P_ICE_brake_total:.2f} kW | Load Ratio (xi): {xi_ICE:.2f}
+    Propeller Shaft Power: {P_shaft_prop:.2f} kW | BSFC: {bsfc_pullup:.1f} g/kWh
     Total Phase Climb Time: {t:.2f} seconds
     Total Distance to Clear Obstacle: {s_roll:.2f} meters (Limit: {ms.max_permissible_stot:.0f} m)
     Final Velocity: {V:.2f} m/s ({V*3.6:.1f} km/h)
     Final Altitude: {h:.2f} meters
     Fuel Burned: {(m_initial - m)*1000.0:.2f} g (Rate: {m_dot_fuel_gps:.2f} g/s)
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
-    Remaining Battery SoC: {SoC*100.0:.2f} %\n''')
+    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''
     ------- Pull Up Failed -------
-    P_ICE: {P_ICE:.2f} kW | P_electric: {P_electric:.2f} kW
+    ICE Total Shaft Power: {P_ICE_brake_total:.2f} kW
     Total Phase Climb Time: {t:.2f} seconds
     Total Distance: {s_roll:.2f} meters
-    Final Speed: {V:.2f} m/s | Altitude: {h:.2f} m
-    Battery SoC: {SoC*100.0:.2f} %\n''')
+    Final Speed: {V:.2f} m/s | Altitude: {h:.2f} m\n''')

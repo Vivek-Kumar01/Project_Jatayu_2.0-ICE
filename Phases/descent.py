@@ -1,3 +1,14 @@
+"""
+================================================================================
+PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
+PHASE 8: GLIDE DESCENT (3,000 m TO 300 m APPROACH GATE)
+================================================================================
+Unpowered aerodynamic glide descent down to the approach fix with the 105 kW 
+Compression-Ignition engine operating at flight idle. Direct-driven 28V alternator 
+supplies avionics electrical load.
+================================================================================
+"""
+
 import math
 from ambiance import Atmosphere
 import jatayu_uav as uav
@@ -9,20 +20,20 @@ import Phases.cruise_in as ci
 # ------------------------------------------------------------------------------
 m_initial = float(ci.m)
 m = m_initial
-SoC = float(ci.SoC)
 
 t_step = 0.1  # seconds
 h_target = ms.altitude_takeoff + 300.0  # m (Approach gate at 300 m AGL)
 
 # Flight idle power setting (6% of sea level rated power)
 percent_idle_power = 6.0  # %
-P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # kW
+P_ICE_Idle = (percent_idle_power / 100.0) * uav.P_ICE_rated  # 6.30 kW for 105 kW block
 
-P_ICE_avionics = ms.power_avionics / uav.eta_alternator  # kW
-P_ICE_shaft = P_ICE_Idle - P_ICE_avionics                # Net shaft output [kW]
-P_prop_shaft = max(0.0, P_ICE_shaft * uav.eta_gearbox_ICE)
+# Direct mechanical parasitic draw for 350 W avionics via built-in alternator
+P_ICE_avionics = ms.power_avionics / uav.eta_alternator       # ~0.427 kW
+P_ICE_shaft = P_ICE_Idle - P_ICE_avionics                     # Net surplus idle brake power [kW]
+P_prop_shaft = max(0.0, P_ICE_shaft * uav.eta_gearbox)
 
-eta_prop = 0.0  # Flight idle: no net positive thrust produced
+eta_prop = 0.0  # Flight idle: windmilling / flat pitch, zero net positive thrust
 P_avail = P_prop_shaft * eta_prop
 
 if P_ICE_shaft < 0.0:
@@ -36,7 +47,7 @@ s_hor = 0.0
 h = float(getattr(ci, 'final_altitude', ms.cruise_altitude))
 
 Phase_Success = True
-t_baseline = float(getattr(ci, 'cumulative_time', ci.t_baseline + ci.time_cruise))
+t_baseline = float(getattr(ci, 'cumulative_time', ci.cumulative_time))
 
 # ------------------------------------------------------------------------------
 # 2. TIME-MARCHING DESCENT INTEGRATION (Cruise Altitude to 300 m)
@@ -53,7 +64,7 @@ while h > h_target:
     D = 0.5 * rho * (V ** 2) * uav.S * Cd
     P_req = D * V  # W
 
-    # Rate of sink (unpowered glide dynamics)
+    # Rate of sink (unpowered glide equilibrium)
     ROS = P_req / (m * 9.81)  # m/s
     sin_theta = max(-1.0, min(1.0, ROS / V))
     theta = math.asin(sin_theta)
@@ -63,7 +74,7 @@ while h > h_target:
     bsfc_descent = uav.get_ice_bsfc(P_ICE_Idle, P_ICE_avail)  # g/kWh
     m_dot_fuel_gps = (P_ICE_Idle * bsfc_descent) / 3600.0     # g/s
 
-    # Mass decrement per step
+    # Mass decrement per step (fuel consumed by idling ICE)
     m_fuel_step_kg = (m_dot_fuel_gps * t_step) / 1000.0
     m -= m_fuel_step_kg
 
@@ -72,12 +83,12 @@ while h > h_target:
     s_hor += V * math.cos(theta) * t_step
     t += t_step
 
-    # Telemetry logging
+    # Telemetry logging (Pure ICE signature)
     fuel_remaining = m - ms.m_zfw
     cumulative_time = t_baseline + t
     ms.log_telemetry(
-        cumulative_time, 'Descent', h, V, P_req / 1000.0, P_ICE_Idle, 0.0,
-        fuel_remaining, SoC, xi_ICE, bsfc_descent, m_dot_fuel_gps
+        cumulative_time, 'Descent', h, V, P_req / 1000.0, P_ICE_Idle,
+        fuel_remaining, xi_ICE, bsfc_descent, m_dot_fuel_gps
     )
 
     if m < ms.m_zfw:
@@ -99,11 +110,10 @@ cumulative_distance = float(getattr(ci, 'cumulative_distance', 0.0)) + s_hor
 final_mass = m
 final_velocity = V
 final_altitude = h
-final_SoC = SoC
 
 if Phase_Success:
     print(f'''
-    ------- Descent Successful -------
+    ------- Descent Successful (Pure ICE 105 kW) -------
     Horizontal Distance Covered: {s_hor/1000.0:.2f} km
     Descent Time: {t/60.0:.2f} min
     Final Altitude: {h:.2f} m (Target: {h_target:.1f} m)
@@ -112,12 +122,11 @@ if Phase_Success:
     Final Mass: {m:.2f} kg
     Fuel Burned: {m_fuel_burned:.2f} kg (Burn Rate: {m_dot_fuel_gps:.2f} g/s)
     Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
-    Untouched Safety Reserve: {ms.mass_reserve:.2f} kg
-    Buffer Battery SoC: {SoC*100.0:.2f} %\n''')
+    Untouched Safety Reserve: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''
     ------- Descent Failed -------
     Horizontal Distance Covered: {s_hor/1000.0:.2f} km
     Descent Time: {t/60.0:.2f} min
     Final Altitude: {h:.2f} m
-    Final Mass: {m:.2f} kg | Final SoC: {SoC*100.0:.2f} %\n''')
+    Final Mass: {m:.2f} kg\n''')
