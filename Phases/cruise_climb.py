@@ -124,7 +124,7 @@ final_altitude = h
 
 if Phase_Success:
     print(f'''
-    ------- Cruise Climb Successful (Pure ICE 105 kW) -------
+    ------- Cruise Climb Successful -------
     EOP ICE Total Power: {P_ICE_brake_total:.2f} kW | Load Ratio (xi): {xi_ICE:.2f}
     Propeller Shaft Power: {P_prop_shaft:.2f} kW | BSFC: {bsfc_cruise_climb:.1f} g/kWh
     Rate of Climb (EOP): {R_C:.2f} m/s
@@ -133,7 +133,7 @@ if Phase_Success:
     Horizontal Distance Travelled: {s_hor/1000.0:.2f} km
     Final Altitude: {h:.2f} m (Target: {h_target:.1f} m)
     Fuel Burned: {(m_initial - m):.2f} kg
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg\n''')
+    Usable Fuel Remaining: {fuel_remaining:.2f} kg\n''')
 else:
     print(f'''
     ------- Cruise Climb Failed -------

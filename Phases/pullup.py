@@ -117,7 +117,7 @@ final_altitude = h
 
 if Phase_Success:
     print(f'''
-    ------- Pull Up Successful (Pure ICE 105 kW) -------
+    ------- Pull Up Successful -------
     ICE Total Shaft Power: {P_ICE_brake_total:.2f} kW | Load Ratio (xi): {xi_ICE:.2f}
     Propeller Shaft Power: {P_shaft_prop:.2f} kW | BSFC: {bsfc_pullup:.1f} g/kWh
     Total Phase Climb Time: {t:.2f} seconds
@@ -125,7 +125,7 @@ if Phase_Success:
     Final Velocity: {V:.2f} m/s ({V*3.6:.1f} km/h)
     Final Altitude: {h:.2f} meters
     Fuel Burned: {(m_initial - m)*1000.0:.2f} g (Rate: {m_dot_fuel_gps:.2f} g/s)
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg\n''')
+    Usable Fuel Remaining: {fuel_remaining:.2f} kg\n''')
 else:
     print(f'''
     ------- Pull Up Failed -------

@@ -137,11 +137,11 @@ if not Phase_Success:
     print(f"Takeoff failed: ground roll {s_roll:.1f} m exceeds limit {ms.max_permissible_sroll:.1f} m")
 else:
     print(f'''
-    ------- Takeoff Successful (Pure ICE 105 kW) -------
+    ------- Takeoff Successful -------
     ICE Total Shaft Power: {P_ICE_brake_total:.2f} kW | Load Ratio (xi): {xi_ICE:.2f}
     Propeller Shaft Power: {P_shaft_prop:.2f} kW | BSFC: {bsfc_takeoff:.1f} g/kWh
     Total Ground Roll Distance: {s_roll:.2f} m (Limit: {ms.max_permissible_sroll:.0f} m)
     Liftoff Velocity (V_LO): {V_LO:.2f} m/s ({V_LO*3.6:.1f} km/h)
     Time to Liftoff: {t:.2f} seconds
     Fuel Burned: {(uav.MTOW - m)*1000.0:.2f} g (Rate: {m_dot_fuel_gps:.2f} g/s)
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg\n''')
+    Usable Fuel Remaining: {fuel_remaining:.2f} kg\n''')

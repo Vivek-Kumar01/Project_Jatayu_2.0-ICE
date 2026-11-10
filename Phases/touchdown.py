@@ -145,12 +145,12 @@ total_mission_time = t_baseline + t
 
 if Phase_Success:
     print(f'''
-    ------- Touchdown Successful (Pure ICE 105 kW) -------
+    ------- Touchdown Successful -------
     ICE Flight Idle: {P_ICE_Idle:.2f} kW | Load Ratio (xi): {xi_ICE_idle:.2f} | BSFC: {bsfc_idle:.1f} g/kWh
     Total Ground Roll Distance: {s_land_roll:.2f} m (Limit: {ms.max_permissible_sroll:.0f} m)
     Time to Full Stop: {t:.2f} seconds
     Fuel Burned During Rollout: {m_fuel_burned*1000.0:.2f} g
-    Unused Usable Fuel: {fuel_remaining - ms.mass_reserve:.2f} kg
+    Unused Usable Fuel: {fuel_remaining:.2f} kg
     Untouched Safety Reserve Fuel: {ms.mass_reserve:.2f} kg
     ======================================================================
     TOTAL MISSION TIME: {total_mission_time/3600.0:.2f} hours ({(total_mission_time/60.0):.1f} mins)

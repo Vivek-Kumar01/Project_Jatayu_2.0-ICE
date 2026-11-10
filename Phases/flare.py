@@ -159,14 +159,14 @@ t_total_flare = t_app + t_flare
 
 if Phase_Success:
     print(f'''
-    ------- Final Approach & Flare Successful (Pure ICE 105 kW) -------
+    ------- Final Approach & Flare Successful -------
     Approach Distance: {s_hor_app:.2f} m | Approach Time: {t_app:.2f} sec
     Flare Initiation Height: {h_flare:.2f} m
     Flare Ground Distance: {s_hor_flare:.2f} m | Flare Time: {t_flare:.2f} sec
     Touchdown Speed: {V_touchdown:.2f} m/s ({V_touchdown*3.6:.1f} km/h)
     Final Aircraft Mass: {m:.2f} kg
     Total Phase Fuel Burned: {m_fuel_burned*1000.0:.2f} g
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
+    Usable Fuel Remaining: {fuel_remaining:.2f} kg
     Untouched Safety Reserve: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''

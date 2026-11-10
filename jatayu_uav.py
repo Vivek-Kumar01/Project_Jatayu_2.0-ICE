@@ -3,15 +3,56 @@
 PROJECT JATAYU: TACTICAL MALE UAV (PURE ICE VARIANT)
 MODULE: jatayu_uav.py
 ================================================================================
-Dedicated standalone 105 kW Compression-Ignition (CI) heavy-fuel propulsion 
-system. Built-in engine accessory generation. Single-input reduction gearbox 
-and strict MTOW = 1000.0 kg mass closure.
+Dedicated standalone Compression-Ignition (CI) heavy-fuel propulsion system 
+with dynamic parametric sizing, Heywood BSFC scaling, and strict MTOW = 1000.0 kg 
+mass closure.
 ================================================================================
 """
 
 import math
 import numpy as np
 from ambiance import Atmosphere
+
+# ==============================================================================
+# 0. CONFIGURATION SWITCH & SCALING CONTROLS
+# ==============================================================================
+edit_baseline = True       # Set to True to resize the ICE from the baseline 105 kW
+P_ICE_target = 105.0        # Target rated brake power in kW (e.g., 80.0, 90.0, 105.0)
+
+# Baseline 105.0 kW Reference Engine Anchors
+P_ICE_rated_base = 105.0         # kW
+M_ICE_dry_base = 148.75          # kg (Heavy-fuel cast block, cylinder heads, crank, pistons)
+M_ICE_accessories_base = 33.68   # kg (Turbocharger, intercooler, radiator, oil core, 28V gen, exhaust)
+
+# Reference 60 kW specific fuel consumption anchors (Heywood base standard)
+BSFC_ICE_ref_opt = 225.0         # g/kWh at xi = 0.70 for 60 kW reference
+BSFC_ICE_ref_max = 245.0         # g/kWh at xi = 1.00 for 60 kW reference
+BSFC_ICE_ref_low = 340.0         # g/kWh at low part-load for 60 kW reference
+
+if edit_baseline:
+    P_ICE_rated = float(P_ICE_target)
+    scale_factor = P_ICE_rated / P_ICE_rated_base
+    
+    # 1. Mass Scaling
+    # Dry core scales close to linearly (~0.95); accessories scale with heat rejection (~0.80)
+    M_ICE_dry = M_ICE_dry_base * (scale_factor ** 0.95)
+    M_ICE_accessories = M_ICE_accessories_base * (scale_factor ** 0.80)
+else:
+    P_ICE_rated = P_ICE_rated_base
+    M_ICE_dry = M_ICE_dry_base
+    M_ICE_accessories = M_ICE_accessories_base
+
+M_ICE_installed = M_ICE_dry + M_ICE_accessories
+
+# 2. Dynamic BSFC Map Parameters (Heywood mass-displacement scaling applied)
+# Scale factor anchored from 60 kW standard: BSFC_scale = (60.0 / P_ICE_rated) ** 0.12
+bsfc_scale = (60.0 / P_ICE_rated) ** 0.12
+BSFC_ICE_opt = BSFC_ICE_ref_opt * bsfc_scale   # Optimal cruise specific fuel burn
+BSFC_ICE_max = BSFC_ICE_ref_max * bsfc_scale   # Full-throttle WOT specific fuel burn
+BSFC_ICE_low = BSFC_ICE_ref_low * bsfc_scale   # Low part-load motoring limit
+
+N_ICE_rated = 3800.0       # Engine crankshaft speed at rated power [RPM]
+
 
 # ==============================================================================
 # 1. AIRFRAME GEOMETRY & FIXED MASSES
@@ -51,7 +92,7 @@ k1 = 0.009                 # Parasitic drag rise coefficient with CL^2
 k3 = 1.0 / (math.pi * AR * e) # Induced drag polar coefficient (~0.02206)
 K = k1 + k3                # Total quadratic drag factor (K ~= 0.03106)
 
-Cd_0 = 0.0265              # Zero-lift parasitic drag (includes radiator pods & payload)
+Cd_0 = 0.022              # Zero-lift parasitic drag (includes radiator pods & payload)
 Cl_ground = 0.35           # Ground roll lift coefficient
 Cl_max_ground_TO = 1.25    # Max ground-effect takeoff CL
 Cl_max_TO = 1.70           # Takeoff rotation lift coefficient
@@ -66,28 +107,11 @@ eta_prop = 0.66            # Flight-tested loiter efficiency (20-deg banked orbi
 
 
 # ==============================================================================
-# 3. 105 kW DEDICATED CI ENGINE SPECIFICATIONS
+# 3. TRANSMISSION & AUXILIARY EFFICIENCIES
 # ==============================================================================
-P_ICE_rated = 105.0        # Continuous rated brake takeoff power at MSL [kW]
-N_ICE_rated = 3800.0       # Engine crankshaft speed at rated power [RPM]
-
-# Scaled Compression-Ignition Engine Dry Core & Subsystem Accessories
-# (Accessories include built-in 28V starter-generator, cooling, oil, ECU)
-M_ICE_dry = 148.75         # Heavy-fuel cast block, cylinder heads, crank, pistons [kg]
-M_ICE_accessories = 33.68  # Turbocharger, intercooler, radiator, oil core, internal 28V gen, exhaust [kg]
-M_ICE_installed = M_ICE_dry + M_ICE_accessories  # 182.43 kg
-
-# Transmission & Auxiliary Power
 eta_gearbox = 0.98         # Direct engine-to-prop shaft mechanical efficiency
 eta_alternator = 0.82      # Internal 28V generator efficiency (crankshaft to 28V bus)
 P_avionics_load = 0.350    # Baseline continuous flight avionics draw [kW] (350 W)
-
-# Dynamic BSFC Map Parameters (Heywood mass-displacement scaling applied)
-# Scale factor = (60 kW / 105 kW)**0.12 = 0.9351
-bsfc_scale = (60.0 / P_ICE_rated) ** 0.12
-BSFC_ICE_opt = 225.0 * bsfc_scale   # ~210.40 g/kWh (Optimal cruise specific fuel burn)
-BSFC_ICE_max = 245.0 * bsfc_scale   # ~229.10 g/kWh (Full-throttle WOT specific fuel burn)
-BSFC_ICE_low = 340.0 * bsfc_scale   # ~317.93 g/kWh (Low part-load motoring limit)
 
 
 # ==============================================================================
@@ -96,20 +120,23 @@ BSFC_ICE_low = 340.0 * bsfc_scale   # ~317.93 g/kWh (Low part-load motoring limi
 k_fuel_sys = 1.05          # 5% dry mass overhead for wing bladders, lines, pumps
 
 # Total Dry Aircraft Mass (Zero Fuel Weight excluding fuel tanks)
-M_dry_empty = M_fixed_empty + M_ICE_installed  # 728.43 kg
+M_dry_empty = M_fixed_empty + M_ICE_installed
 
 # Remaining mass under 1000 kg MTOW dedicated to total fuel system
-M_fuel_capacity_gross = MTOW - M_dry_empty             # 271.57 kg
-M_fuel_usable = M_fuel_capacity_gross / k_fuel_sys     # 258.64 kg
-M_fuel_tanks = M_fuel_capacity_gross - M_fuel_usable   # 12.93 kg
+M_fuel_capacity_gross = MTOW - M_dry_empty
+M_fuel_usable = M_fuel_capacity_gross / k_fuel_sys
+M_fuel_tanks = M_fuel_capacity_gross - M_fuel_usable
 
-# Zero Fuel Weight (ZFW)
-m_zfw = MTOW - M_fuel_usable                           # 741.36 kg
+# True Structural Zero Fuel Weight (ZFW)
+m_zfw = MTOW - M_fuel_usable
 
-# Operational Fuel Reserves (6% safe reserve)
+# Operational Fuel Reserves (6% safe statutory reserve)
 reserve_fuel_ratio = 0.06
-M_fuel_reserve = M_fuel_usable * reserve_fuel_ratio    # 15.52 kg
-M_fuel_mission = M_fuel_usable - M_fuel_reserve        # 243.12 kg
+M_fuel_reserve = M_fuel_usable * reserve_fuel_ratio
+M_fuel_mission = M_fuel_usable - M_fuel_reserve
+
+# Mass floor for mission integration (preserves 6% reserve)
+m_abort_limit = m_zfw + M_fuel_reserve
 
 # Reference Ambient Density
 rho_0 = 1.2250             # Sea-level standard air density [kg/m^3]
@@ -136,7 +163,7 @@ def get_ice_available_power(h_m, P_rated=P_ICE_rated):
 
 def get_ice_bsfc(P_brake_kW, P_avail_kW):
     """
-    Brake Specific Fuel Consumption (BSFC) in [g/kWh] for the 105 kW CI block.
+    Brake Specific Fuel Consumption (BSFC) in [g/kWh] for the sized CI block.
     Evaluates dynamic engine load ratio xi = P_brake / P_avail along a convex 
     efficiency curve anchored at optimal xi = 0.70.
     """

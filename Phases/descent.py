@@ -121,7 +121,7 @@ if Phase_Success:
     ICE Flight Idle: {P_ICE_Idle:.2f} kW | Load Ratio (xi): {xi_ICE:.2f} | BSFC: {bsfc_descent:.1f} g/kWh
     Final Mass: {m:.2f} kg
     Fuel Burned: {m_fuel_burned:.2f} kg (Burn Rate: {m_dot_fuel_gps:.2f} g/s)
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
+    Usable Fuel Remaining: {fuel_remaining:.2f} kg
     Untouched Safety Reserve: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''

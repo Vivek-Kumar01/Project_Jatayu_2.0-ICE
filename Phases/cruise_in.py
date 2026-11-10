@@ -109,7 +109,7 @@ final_altitude = h
 
 if Phase_Success:
     print(f'''
-    ------- Cruise In Successful (Pure ICE 105 kW) -------
+    ------- Cruise In Successful -------
     Target Transit Distance: {target_transit_dist:.2f} km | Covered: {dist_covered:.2f} km
     Transit Time: {time_cruise/60.0:.2f} min ({time_cruise/3600.0:.2f} hours)
     Cruise Velocity: {vel_cruise:.2f} m/s ({vel_cruise*3.6:.1f} km/h)
@@ -117,7 +117,7 @@ if Phase_Success:
     ICE Total Brake Load: {P_ICE_brake_total:.2f} kW | Load Ratio (xi): {xi_ICE:.2f} | BSFC: {bsfc_cruise_in:.1f} g/kWh
     Final Aircraft Mass: {m:.2f} kg
     Fuel Burned: {m_fuel_burned:.2f} kg (Burn Rate: {m_dot_fuel_gps:.2f} g/s)
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
+    Usable Fuel Remaining: {fuel_remaining:.2f} kg
     Untouched Safety Reserve: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''

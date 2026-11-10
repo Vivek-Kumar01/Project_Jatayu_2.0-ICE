@@ -46,7 +46,7 @@ endurance = 0.0          # Total elapsed loiter time (s)
 
 # Return-to-Base (RTB) fuel margin reserved for outbound-matched Cruise-In
 fraction_keep = 1.05     # 5% buffer over cruise-out burn to ensure safe RTB
-min_mass_cruisein = ms.m_zfw + ms.mass_reserve + (fraction_keep * co.m_fuel_burned)
+min_mass_cruisein = ms.m_zfw + (fraction_keep * co.m_fuel_burned)
 
 Phase_Success = True
 t_baseline = float(getattr(co, 'cumulative_time', co.t_baseline + co.time_cruise))
@@ -106,7 +106,7 @@ final_altitude = h
 
 if Phase_Success:
     print(f'''
-    ------- Sustained Loiter Successful (Pure ICE 105 kW) -------
+    ------- Sustained Loiter Successful -------
     Total Loiter Endurance: {endurance / 3600.0:.2f} hours ({(endurance / 60.0):.1f} mins)
     Loiter Speed (Final): {vel_loiter:.2f} m/s ({vel_loiter*3.6:.1f} km/h)
     Propeller Shaft Power: {P_shaft_prop:.2f} kW
@@ -114,7 +114,7 @@ if Phase_Success:
     Instantaneous BSFC: {bsfc_loiter:.1f} g/kWh | Burn Rate: {m_dot_fuel_gps:.2f} g/s
     Fuel Burned During Loiter: {m_fuel_loiter_burned:.2f} kg
     Final Aircraft Mass: {m:.2f} kg
-    Usable Fuel Remaining for RTB: {fuel_remaining - ms.mass_reserve:.2f} kg
+    Usable Fuel Remaining for RTB: {fuel_remaining:.2f} kg
     Untouched Reserve Fuel: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''

@@ -180,7 +180,7 @@ final_altitude = h
 
 if Phase_Success:
     print(f'''
-    ------- Approach Successful (Pure ICE 105 kW) -------
+    ------- Approach Successful -------
     Horizontal Distance Covered: {s_hor/1000.0:.2f} km
     Approach Time: {t/60.0:.2f} min
     Final Altitude: {h:.2f} m (Target: {h_target:.1f} m)
@@ -189,7 +189,7 @@ if Phase_Success:
     Throttle Demand: {percent_power*100.0:.1f} % of available
     Final Aircraft Mass: {m:.2f} kg
     Fuel Burned: {m_fuel_burned:.2f} kg
-    Usable Fuel Remaining: {fuel_remaining - ms.mass_reserve:.2f} kg
+    Usable Fuel Remaining: {fuel_remaining:.2f} kg
     Untouched Safety Reserve: {ms.mass_reserve:.2f} kg\n''')
 else:
     print(f'''

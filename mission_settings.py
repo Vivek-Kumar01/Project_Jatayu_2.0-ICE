@@ -21,7 +21,7 @@ reserve_fuel = uav.reserve_fuel_ratio # 0.06 (6% reserve fraction)
 mass_fuel = uav.M_fuel_usable         # Total usable fuel [kg] (258.64 kg)
 mass_reserve = uav.M_fuel_reserve     # Reserve fuel [kg] (15.52 kg)
 mass_mission_fuel = uav.M_fuel_mission# Mission fuel [kg] (243.12 kg)
-m_zfw = uav.m_zfw                     # Zero Fuel Weight [kg] (741.36 kg)
+m_zfw = uav.m_zfw + mass_reserve                   # Zero Usable Fuel Weight [kg] (741.36 kg)
 
 wing_loading = uav.MTOW / uav.S       # kg/m² (~45.45 kg/m²)
 power_loading = uav.MTOW / uav.P_ICE_rated  # kg/kW standalone (1000 / 105 ~= 9.52 kg/kW)
