@@ -16,7 +16,7 @@ from ambiance import Atmosphere
 # ==============================================================================
 # 0. CONFIGURATION SWITCH & SCALING CONTROLS
 # ==============================================================================
-edit_baseline = True       # Set to True to resize the ICE from the baseline 105 kW
+edit_baseline = False       # Set to True to resize the ICE from the baseline 105 kW
 P_ICE_target = 105.0        # Target rated brake power in kW (e.g., 80.0, 90.0, 105.0)
 
 # Baseline 105.0 kW Reference Engine Anchors

@@ -81,7 +81,7 @@ while m > min_mass_cruisein:
     m_fuel_step_kg = (m_dot_fuel_gps * t_step) / 1000.0
     m -= m_fuel_step_kg
 
-    if m <= (ms.m_zfw + ms.mass_reserve):
+    if m <= (ms.m_zfw):
         print("Emergency fuel reserve breached during loiter! RTB immediately.")
         break
 
